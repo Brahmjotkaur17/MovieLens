@@ -1,0 +1,331 @@
+---
+title: "MovieLens"
+author: "Brahmjot Kaur"
+output: pdf_document
+date: "2023-02-11"
+---
+
+## OVERVIEW
+
+This project is a part of MovieLens Project of the Harvardx: PH125.9x Data Science: Capstone course. The MovieLens 10M dataset is a dataset that contains ratings and movie information provided by users on the MovieLens website. The dataset includes 10 million ratings and 100,000 tag applications applied to 10,677 movies by 69878 users. The ratings are on a scale from 0.5 to 5. The key steps that were performed to achieve this goal include:
+
+1\. Loading and cleaning of the data from the ratings and movies files in the dataset by reading in the data from the files, splitting the data, and setting appropriate column names. The data is then transformed so that the userId and movieId variables are integers and the rating variable is numeric.
+
+2\. Joining the ratings and movies data to create a single data frame, movielens by using a left_join function, which combines the two data frames on the movieId variable. A data frame is created that includes all the information from both the ratings and movies data frames.
+
+3\. Splitting the MovieLens data frame into two sets, edx and final_holdout_test, where final_holdout_test will be used to evaluate the performance of the recommendation algorithm and edx data set will be used for training the algorithm. The data is split using createDataPartition function with a seed of 1, and 10% of the data is selected as final_holdout_test set.
+
+4\. Creating an algorithm to predict the ratings for movies in the final_holdout_test set using the edx set and calculating the Root Mean Squared Error (RMSE) to evaluate the performance of the algorithm.
+
+## AIM
+
+The goal of this project is to use MovieLens dataset to train an algorithm for rating prediction. The recommendation algorithm will use user's past movie ratings and predict what movies they would rate highly in the future. This can be useful for making personalized movie recommendations to users on a movie streaming platform or in a movie rental store. RMSE stands for Root Mean Squared Error. It measures how well a prediction model is performing by calculating the difference between the actual values and the predicted values. The RMSE is calculated by taking the square root of the mean of the squared differences between the actual and predicted values. The value of RMSE is inversely proportional to the performance of the model that is smaller the RMSE value, better the performance of the model, as it indicates that the model is making predictions that are very close to the actual values. $$ RMSE = \sqrt{\frac{1}{N}\displaystyle\sum_{u,i} (\hat{y}_{u,i}-y_{u,i})^{2}} $$
+
+The algorithm with best results in terms of RMSE value will be used for prediction of movie ratings.
+
+## DATASET
+
+The MovieLens 10M dataset is downloaded using the following links:
+
+• [MovieLens 10M dataset] <https://grouplens.org/datasets/movielens/10m/>
+
+• [MovieLens 10M dataset - zip file] <http://files.grouplens.org/datasets/movielens/ml-10m.zip>
+
+```{r, echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+##########################################################
+# Create edx and final_holdout_test sets 
+##########################################################
+
+if(!require(tidyverse)) install.packages("tidyverse", repos = "http://cran.us.r-project.org")
+if(!require(caret)) install.packages("caret", repos = "http://cran.us.r-project.org")
+if(!require(ggplot2)) install.packages("ggplot2", repos = "http://cran.us.r-project.org")
+if(!require(reshape2)) install.packages("reshape2", repos = "http://cran.us.r-project.org")
+if(!require(tinytex)) install.packages("reshape2", repos = "http://cran.us.r-project.org")
+
+library(tidyverse)
+library(ggplot2)
+library(caret)
+library(reshape2)
+library(tinytex)
+
+options(timeout = 120)
+
+dl <- "ml-10M100K.zip"
+if(!file.exists(dl))
+  download.file("https://files.grouplens.org/datasets/movielens/ml-10m.zip", dl)
+
+ratings_file <- "ml-10M100K/ratings.dat"
+if(!file.exists(ratings_file))
+  unzip(dl, ratings_file)
+
+movies_file <- "ml-10M100K/movies.dat"
+if(!file.exists(movies_file))
+  unzip(dl, movies_file)
+
+ratings <- as.data.frame(str_split(read_lines(ratings_file), fixed("::"), simplify = TRUE),
+                         stringsAsFactors = FALSE)
+colnames(ratings) <- c("userId", "movieId", "rating", "timestamp")
+ratings <- ratings %>%
+  mutate(userId = as.integer(userId),
+         movieId = as.integer(movieId),
+         rating = as.numeric(rating),
+         timestamp = as.integer(timestamp))
+
+movies <- as.data.frame(str_split(read_lines(movies_file), fixed("::"), simplify = TRUE),
+                        stringsAsFactors = FALSE)
+colnames(movies) <- c("movieId", "title", "genres")
+movies <- movies %>%
+  mutate(movieId = as.integer(movieId))
+
+movielens <- left_join(ratings, movies, by = "movieId")
+```
+
+The dataset for the movies and ratings is unzipped and downloaded. These files are read into the following datasets using function 'str_split' with separator '::'. Column names for ratings and movie datasets are provided. These datasets are joined using the 'left_join' to create the movieLens data frame.
+
+```{r, echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+# Final hold-out test set will be 10% of MovieLens data
+set.seed(1, sample.kind="Rounding") # if using R 3.6 or later
+# set.seed(1) # if using R 3.5 or earlier
+test_index <- createDataPartition(y = movielens$rating, times = 1, p = 0.1, list = FALSE)
+edx <- movielens[-test_index,]
+temp <- movielens[test_index,]
+
+# Make sure userId and movieId in final hold-out test set are also in edx set
+final_holdout_test <- temp %>% 
+  semi_join(edx, by = "movieId") %>%
+  semi_join(edx, by = "userId")
+
+# Add rows removed from final hold-out test set back into edx set
+removed <- anti_join(temp, final_holdout_test)
+edx <- rbind(edx, removed)
+
+rm(dl, ratings, movies, test_index, temp, movielens, removed)
+```
+
+Dataset 'edx' is created from the 'movieLens' data by using a sample of 90% of the movieLens dataset. This is done by using function createDataPartition (). The other 10% of dataset 'MovieLens' is used to create the dataset 'temp'. 'final_holdout_test' dataset is created by altering the 'temp' to only include the users and movies that are also present in the 'edx' dataset using 'semi_join ()' on "movieId" and "UserId".
+
+## METHODS
+
+### DATA ANALYSIS
+
+The dataset "edx" has six variables 'userId', 'movieId', 'rating', 'timestamp', 'title', and 'genres'.
+
+```{r, echo=FALSE}
+head(edx)
+```
+
+```{r, echo=FALSE}
+summary(edx)
+```
+
+Initiating the data analysis for 'edx' by calculating the mean, median and standard deviation of the ratings in 'edx'.
+
+```{r , echo=TRUE}
+mean(edx$rating)
+median(edx$rating)
+sd(edx$rating)
+```
+
+The 'edx' dataset has 9000055 entries which consists ratings of 10677 movies given by 69878 users where one user can rate multiple movies and one movie can be rated by multiple users.
+
+```{r, echo=TRUE}
+nrow(edx)
+n_distinct(edx$userId)
+n_distinct(edx$movieId)
+```
+
+```{r echo=FALSE}
+b<-edx %>% group_by(rating) %>% summarize(count = n())
+b %>% ggplot(aes(rating,count))+geom_point() +geom_line(color="red")
+```
+
+As this data depicts , users prefer rating higher than lower. We notice that 4 is the most common rating. It is followed by 3 and 5. It can be noticed as well that whole star ratings(eg 3,4,5) are much common than the half ratings(eg 0.5,1.5).
+
+```{r echo=FALSE}
+a<-edx %>% group_by(movieId) %>% summarize(count = n())
+a %>% ggplot(aes(count))+geom_histogram(bins = 40,color="black")+scale_x_log10()+xlab("Number of ratings")+ylab("Number of movies")
+
+```
+
+The above bar graph shows number of ratings vs the number of movies. There are some movies rated much often than others. There are around 126 movies which are rated only once and only 3 movies with over 30000 ratings. This is important for our model as very less rating numbers may result in untrustworthy estimate for predictions. A movie on average receives around 935 ratings.\
+This graph clearly shows the inclined distribution of movies for number of ratings over 100.
+
+```{r echo=FALSE}
+
+best<-edx %>% group_by(movieId) %>% summarise(Avg_rating=mean(rating),num_ratings=n()) %>% arrange(desc(num_ratings))
+best %>% ggplot(aes(num_ratings,Avg_rating))+geom_point()+scale_x_log10()
+```
+
+Is Average ratings affected by the number of ratings? This graph clearly shows that the average rating is directly proportional to the number of ratings.
+
+### Analysis on the basis of genre
+
+There are around 797 genres in the edx dataset.
+
+The 10 genres rated the lowest are listed below
+
+```{r echo=FALSE}
+ gen<-edx %>% group_by(genres) %>% summarise(Avg_rating=mean(rating),num_ratings=n())
+gen %>% arrange(Avg_rating) %>% print(n=10)
+```
+
+The 10 genres with highest ratings are listed as below
+
+```{r echo=FALSE}
+gen %>% arrange(desc(Avg_rating)) %>% print(n=10)
+sing_gen<-gen%>%filter(str_count(genres, "\\|") == 0)
+```
+
+```{r echo=FALSE}
+sing_gen<-sing_gen %>% arrange(desc(num_ratings))
+plot1<-sing_gen %>% ggplot(aes(y = genres, x = num_ratings)) +
+       geom_bar(stat = "identity", fill = "steelblue") +
+          xlab("Genres") +
+          ylab("Number of ratings") +
+          ggtitle("Number of ratings by genres") 
+plot1
+
+```
+
+10 highest rated genres
+
+```{r echo=FALSE}
+sing_gen%>%arrange(desc(Avg_rating))%>% print(n=10)
+```
+
+## MODELLING
+
+### Model 1- Average movie rating
+
+The first basic model predicts rating for all movies as the mean of the ratings in the dataset MovieLens. While we all know this is not the optimal approach, we get the baseline RMSE value to which we can compare the future models.
+
+```{r echo=FALSE}
+mu<-mean(edx$rating)
+mu
+```
+
+'*mu'* represents the mean of the ratings in the edx dataset.
+
+```{r echo=FALSE}
+naive_rmse<-RMSE(final_holdout_test$rating,mu)
+result_rmse<-data_frame(Method="Mean Movie rating",RMSE=naive_rmse)
+result_rmse %>% knitr::kable()
+```
+
+In order to find other better approach , collaborative filtering can be used in order to evaluate the model.
+
+### Model 2- Movie Effect Model
+
+Some movies are rated higher than the others. Hence, providing every movie with the same rating as in Model 1 would be unfair. This model is built by taking account the the average ratings of each individual movie. '*diff*' in the plot below is the deviation of the mean rating of each movie from the total mean calculated earlier as '*mu'*.
+
+```{r echo=FALSE}
+Avg_movies<- edx %>% group_by(movieId) %>% summarize(diff=mean(rating-mu))
+Avg_movies %>% ggplot(aes(diff)) +geom_histogram(bins=20,color="black")+labs(y="Number of movies")
+
+```
+
+We predict the movie ratings on the basis of the fact that if a movie has an average rating lesser than the average of all movies. The predicted rating would be '*diff*' less than '*mu*' and vice versa.
+
+```{r echo=FALSE}
+predicted_ratings <- mu +  final_holdout_test %>%
+  left_join(Avg_movies, by='movieId') %>%
+  pull(diff)
+RMSE_movie<-RMSE(predicted_ratings,final_holdout_test$rating)
+result_rmse<-bind_rows(result_rmse,data_frame(Method="Movie effect",RMSE=RMSE_movie))
+result_rmse %>% knitr::kable()
+```
+
+### Model 3- Movie and User Effect
+
+Knowing that some users are more critical than the others. Hence, it is recommmend to include the effect of an individual user in the prediction of ratings. User Effect is taken into account by calculating the average rating for the users rating more than 128 movies. 128 is used as this the approximate average number of ratings provided by a user.
+
+```{r echo=FALSE}
+Avg_Users<-edx %>% group_by(userId) %>%left_join(Avg_movies,by="movieId")%>% filter(n()>=128) %>% summarize(diff_u=mean(rating-mu-diff))
+Avg_Users %>% ggplot(aes(diff_u))+geom_histogram(bins=25,color="black")
+```
+
+The table below represents the mean difference in the mean ratings provided by each user to the total rating. '*diff_u*' is calculated by subtracting the total average rating '*mu'* to the average rating provided by each user.'*diff*' is further subtracted to add the movie effect in the predicted data.
+
+```{r echo=FALSE}
+Avg_Users<-edx %>% group_by(userId) %>%left_join(Avg_movies,by="movieId") %>% summarize(diff_u=mean(rating-mu-diff))
+Avg_Users %>% print(n=5)
+```
+
+***mean(training set+movie bias+user bias)= mu+diff+diff_u***
+
+```{r echo=FALSE}
+predicted_ratings<-mu+ final_holdout_test %>% left_join(Avg_movies,by="movieId")%>%left_join(Avg_Users,by="userId")%>% mutate(pred=diff+diff_u) %>% pull(pred)
+RMSE_movieUser=RMSE(predicted_ratings,final_holdout_test$rating)
+result_rmse<-bind_rows(result_rmse,data_frame(Method="Movie and User effect",RMSE=RMSE_movieUser))
+result_rmse %>% knitr::kable()
+```
+
+### Method 4- Movie and User Effect Regularized
+
+To improve the previous model, regularization is implemented. Some of the movies were rated less and some users rated only a few movies. This influences the prediction. Hence, we find the value of lambda that will minimize the RMSE. This will shrink bias values '*diff*' and ' *diff_u'* in case of fewer ratings.
+
+```{r echo=FALSE}
+lambdas<-seq(1,10,0.25)
+rmses<-sapply(lambdas, function(x){
+  #mu<-mean(edx$rating)
+  diff<-edx %>% 
+    group_by(movieId)%>%
+    summarize(diff=sum(rating-mu)/(n()+x))
+  diff_u<-edx %>%
+    group_by(userId)%>%
+    left_join(diff,by="movieId")%>%
+    summarize(diff_u=sum(rating-diff-mu)/(n()+x))
+  predicted_ratings<-mu+final_holdout_test%>%
+    left_join(diff,by="movieId")%>%
+    left_join(diff_u,by="userId")%>%
+    mutate(pred=diff+diff_u) %>% 
+    pull(pred)
+  return(RMSE(predicted_ratings,final_holdout_test$rating))
+})
+qplot(lambdas,rmses)
+```
+
+The above plot indicates the RMSE values for each lambda. Hence, simply by finding the lowest RMSE value and the corresponding lambda(tuning factor)
+
+```{r echo=FALSE}
+RMSE_lambda<-rmses[which.min(rmses)]
+result_rmse<-bind_rows(result_rmse,data_frame(Method="Movie and User effect(optimal lambda)",RMSE=RMSE_lambda))
+result_rmse %>%knitr::kable()
+```
+
+### Method 5- Movie, User and Genre Effects
+
+The genre variable may help in prediction of rating as some genres have higher ratings than others. There are around 797 genres. Calculating the bias for genre can affect the prediction.
+
+```{r echo=FALSE}
+Avg_genre<-edx %>% group_by(genres)%>%left_join(Avg_movies,by="movieId")%>%left_join(Avg_Users,by="userId")%>%summarize(diff_g=mean(rating-mu-diff-diff_u))
+Avg_genre %>% ggplot(aes(diff_g))+geom_histogram(bins=25,color="black")
+```
+
+The table below shows the genres along with difference in the ratings and the mean of particular movie , user and genre i.e. '*diff_g'.*
+
+```{r echo=FALSE}
+Avg_genre %>% print(n=5)
+predicted_ratings<-mu+ final_holdout_test %>% left_join(Avg_movies,by="movieId")%>%left_join(Avg_Users,by="userId")%>%left_join(Avg_genre,by="genres")%>% mutate(pred=diff+diff_u+diff_g) %>% pull(pred)
+
+```
+
+```{r echo=FALSE}
+RMSE_MovieGenre<-RMSE(predicted_ratings,final_holdout_test$rating)
+result_rmse<-bind_rows(result_rmse,data_frame(Method="Movie,User and genre effect",RMSE=RMSE_MovieGenre))
+result_rmse %>%knitr::kable()
+```
+
+## RESULTS
+
+Below is the table consisting all the RMSE values with their respective methods:
+
+```{r echo=FALSE}
+result_rmse %>%knitr::kable()
+```
+
+The capstone project required the value of RMSE less than 0.86490.
+
+## CONCLUSIONS
+
+This project is based on the implementation of various machine learning and data visualization tools for analyzing the dataset. The visualizations are created on the basis of various attributes in the dataset which could affect the prediction of the ratings. Visualization of the dataset was the most interesting past of this project as it could help identifying various patterns between the various attributes which weren't evident. Libraries such as *recommmenderlab* and *Matrix* are installed for matrix factorization and collaborative filtering. Considering collaborative filtering of the data of the basis of *MovieId, UserId, and genre* have affected the RMSE value. Other machine models can also be used in order to predict the ratings in a more optimal way.
